@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mini NBA Smart Score</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #080d18;
+  --panel: #121b2c;
+  --orange: #ff8a24;
+  --green: #42e695;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 22px 14px;
+  background: var(--bg);
+  color: #f5f7ff;
+  font-family: system-ui, Arial, sans-serif;
+}
+main { max-width: 850px; margin: auto; }
+header { text-align: center; margin-bottom: 24px; }
+header .ball { font-size: 44px; }
+h1 { margin: 4px 0; font-size: clamp(26px, 6vw, 40px); }
+.subtitle { color: #9eacc4; }
+.status {
+  display: inline-block;
+  padding: 7px 12px;
+  margin-top: 10px;
+  border-radius: 30px;
+  background: #263249;
+  color: #b8c7df;
+  font-size: 13px;
+}
+.scoreboard {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.team {
+  background: var(--panel);
+  border: 1px solid #283650;
+  border-radius: 18px;
+  text-align: center;
+  padding: 22px 10px;
+}
+.team h2 { font-size: 15px; letter-spacing: 1px; }
+.score {
+  font-size: clamp(55px, 13vw, 90px);
+  font-weight: 900;
+  color: var(--orange);
+  font-variant-numeric: tabular-nums;
+}
+button {
+  border: 0;
+  border-radius: 11px;
+  padding: 13px 15px;
+  background: #263650;
+  color: white;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+button:active { transform: scale(.97); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.team button { width: 100%; margin-top: 8px; }
+.primary { background: var(--orange); color: #17100a; }
+.success { background: var(--green); color: #062115; }
+.danger { background: #652d3b; }
+.panel {
+  margin-top: 18px;
+  padding: 18px;
+  background: var(--panel);
+  border: 1px solid #283650;
+  border-radius: 18px;
+}
+.panel h3 { margin: 0 0 12px; }
+.row { display: flex; flex-wrap: wrap; gap: 9px; }
+.row button { flex: 1; }
+#clock {
+  text-align: center;
+  font-size: 38px;
+  font-weight: 800;
+  margin: 10px;
+}
+video {
+  width: 100%;
+  max-height: 350px;
+  background: #03060b;
+  border-radius: 12px;
+  object-fit: contain;
+}
+.note { color: #9eacc4; font-size: 13px; line-height: 1.5; }
+#events { padding-left: 20px; }
+#events li { margin: 7px 0; color: #c9d4e8; }
+footer { text-align: center; color: #75839b; margin: 25px 0; }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div class="ball">🏀</div>
+  <h1>MINI NBA SMART SCORE</h1>
+  <div class="subtitle">Sua quadra. Sua tecnologia.</div>
+  <div class="status" id="status">● Sistema iniciado</div>
+</header>
+
+<section class="scoreboard">
+  <article class="team">
+    <h2>JOGADOR 1</h2>
+    <div class="score" id="score1">00</div>
+    <button class="primary" onclick="addPoint(1)">+1 PONTO</button>
+  </article>
+  <article class="team">
+    <h2>JOGADOR 2</h2>
+    <div class="score" id="score2">00</div>
+    <button class="primary" onclick="addPoint(2)">+1 PONTO</button>
+  </article>
+</section>
+
+<section class="panel">
+  <h3>⏱️ Cronômetro</h3>
+  <div id="clock">01:00</div>
+  <div class="row">
+    <button class="success" id="timerBtn" onclick="toggleTimer()">▶ Iniciar</button>
+    <button onclick="resetTimer()">↻ Reiniciar tempo</button>
+  </div>
+</section>
+
+<section class="panel">
+  <h3>📷 Câmera e visão computacional</h3>
+  <video id="camera" autoplay playsinline muted></video>
+  <div class="row" style="margin-top:12px">
+    <button class="success" id="cameraBtn" onclick="startCamera()">Ativar câmera</button>
+    <button onclick="stopCamera()">Desligar câmera</button>
+  </div>
+  <p class="note" id="cameraInfo">
+    A câmera ainda não está conectada. A detecção automática por IA será
+    adicionada na próxima etapa. O vídeo permanece neste dispositivo.
+  </p>
+</section>
+
+<section class="panel">
+  <h3>🧠 Controle da partida</h3>
+  <div class="row">
+    <button onclick="undoPoint()">↩ Desfazer ponto</button>
+    <button class="danger" onclick="resetGame()">Zerar partida</button>
+  </div>
+  <p class="note">Os pontos atuais são controlados manualmente.
+  A conexão IoT e a detecção automática serão implementadas nas próximas etapas.</p>
+</section>
+
+<section class="panel">
+  <h3>📊 Histórico da partida</h3>
+  <ol id="events">
+    <li>Partida pronta para começar.</li>
+  </ol>
+  <button onclick="clearHistory()" style="margin-top:8px">Limpar histórico</button>
+</section>
+
+<footer>MINI NBA SMART SCORE · PROTÓTIPO 1.0</footer>
+</main>
+
+<script>
+let scores = [0, 0];
+let history = [];
+let seconds = 60;
+let timer = null;
+let stream = null;
+
+const $ = id => document.getElementById(id);
+
+function updateScores() {
+  $("score1").textContent = String(scores[0]).padStart(2, "0");
+  $("score2").textContent = String(scores[1]).padStart(2, "0");
+}
+
+function addPoint(player) {
+  scores[player - 1]++;
+  history.push({ player, time: new Date().toLocaleTimeString("pt-BR") });
+  updateScores();
+  renderHistory();
+  $("status").textContent = "● Ponto registrado";
+}
+
+function undoPoint() {
+  const last = history.pop();
+  if (!last) return;
+  scores[last.player - 1] = Math.max(0, scores[last.player - 1] - 1);
+  updateScores();
+  renderHistory();
+}
+
+function renderHistory() {
+  const list = $("events");
+  list.replaceChildren();
+  if (!history.length) {
+    const li = document.createElement("li");
+    li.textContent = "Nenhum ponto registrado.";
+    list.appendChild(li);
+    return;
+  }
+  history.slice().reverse().forEach(event => {
+    const li = document.createElement("li");
+    li.textContent = `${event.time} — Jogador ${event.player} marcou 1 ponto`;
+    list.appendChild(li);
+  });
+}
+
+function clearHistory() {
+  history = [];
+  renderHistory();
+}
+
+function showClock() {
+  $("clock").textContent =
+    String(Math.floor(seconds / 60)).padStart(2, "0") + ":" +
+    String(seconds % 60).padStart(2, "0");
+}
+
+function toggleTimer() {
+  if (timer) {
+    clearInterval(timer);
+    timer = null;
+    $("timerBtn").textContent = "▶ Continuar";
+    return;
+  }
+  if (seconds <= 0) return;
+  $("timerBtn").textContent = "⏸ Pausar";
+  timer = setInterval(() => {
+    seconds--;
+    showClock();
+    if (seconds <= 0) {
+      clearInterval(timer);
+      timer = null;
+      $("timerBtn").textContent = "⏱ Tempo encerrado";
+      $("status").textContent = "● Fim de partida";
+    }
+  }, 1000);
+}
+
+function resetTimer() {
+  clearInterval(timer);
+  timer = null;
+  seconds = 60;
+  showClock();
+  $("timerBtn").textContent = "▶ Iniciar";
+}
+
+function resetGame() {
+  if (!confirm("Quer zerar os pontos e reiniciar a partida?")) return;
+  scores = [0, 0];
+  history = [];
+  updateScores();
+  renderHistory();
+  resetTimer();
+  $("status").textContent = "● Nova partida";
+}
+
+async function startCamera() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    $("cameraInfo").textContent =
+      "Câmera indisponível. Abra o site por HTTPS e permita o acesso à câmera.";
+    return;
+  }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment" },
+      audio: false
+    });
+    $("camera").srcObject = stream;
+    $("cameraInfo").textContent =
+      "Câmera conectada. Esta versão ainda não reconhece cestas automaticamente.";
+    $("status").textContent = "● Câmera conectada";
+    $("cameraBtn").disabled = true;
+  } catch (error) {
+    $("cameraInfo").textContent =
+      "Não foi possível acessar a câmera: " + error.message +
+      ". Verifique as permissões do navegador.";
+  }
+}
+
+function stopCamera() {
+  if (stream) stream.getTracks().forEach(track => track.stop());
+  stream = null;
+  $("camera").srcObject = null;
+  $("cameraBtn").disabled = false;
+  $("cameraInfo").textContent = "Câmera desligada.";
+  $("status").textContent = "● Sistema iniciado";
+}
+
+window.addEventListener("pagehide", () => {
+  if (stream) stream.getTracks().forEach(track => track.stop());
+});
+
+updateScores();
+showClock();
+</script>
+</body>
+</html>
